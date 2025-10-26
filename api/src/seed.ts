@@ -1,20 +1,98 @@
-import { PrismaClient } from '@prisma/client';
-const prisma = new PrismaClient();
+import { createClient } from '@supabase/supabase-js';
+import dotenv from 'dotenv';
+
+dotenv.config({ path: '../.env' });
+
+const supabase = createClient(
+  process.env.VITE_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
 
 async function main() {
-  const user = await prisma.user.upsert({
-    where: { email: 'demo@example.com' },
-    update: {},
-    create: { email: 'demo@example.com', name: 'Demo', passwordHash: '$2a$10$u1M9xGgJ9Nv5dR9wCwA08uvqzv5rB6d.2Lr0qE5n5r8Z0cUD1b6jK' } // password: demo1234
-  });
-  const ws = await prisma.workspace.create({ data: { name: 'Demo Space', slug: 'demo-space',
-    memberships: { create: { userId: user.id, role: 'OWNER' } } } });
-  const proj = await prisma.project.create({ data: { name: 'Demo Project', key: 'DEMO', workspaceId: ws.id,
-    members: { create: { userId: user.id, role: 'MANAGER' } } } });
-  const todo = await prisma.column.create({ data: { name: 'To Do', order: 1, projectId: proj.id } });
-  const doing = await prisma.column.create({ data: { name: 'Doing', order: 2, projectId: proj.id } });
-  const done = await prisma.column.create({ data: { name: 'Done', order: 3, projectId: proj.id } });
-  await prisma.task.create({ data: { title: 'Welcome task', description: 'Drag me!', columnId: todo.id } });
-  console.log('Seeded. Project ID:', proj.id);
+  const { data: existingUser } = await supabase
+    .from('users')
+    .select('id')
+    .eq('email', 'demo@example.com')
+    .maybeSingle();
+
+  let userId: string;
+
+  if (existingUser) {
+    userId = existingUser.id;
+    console.log('User already exists, using existing user');
+  } else {
+    const { data: user, error: userError } = await supabase
+      .from('users')
+      .insert({
+        email: 'demo@example.com',
+        name: 'Demo',
+        password_hash: '$2a$10$u1M9xGgJ9Nv5dR9wCwA08uvqzv5rB6d.2Lr0qE5n5r8Z0cUD1b6jK'
+      })
+      .select()
+      .single();
+
+    if (userError) {
+      console.error('Error creating user:', userError);
+      return;
+    }
+    userId = user!.id;
+    console.log('Created user:', user);
+  }
+
+  const { data: ws, error: wsError } = await supabase
+    .from('workspaces')
+    .insert({ name: 'Demo Space', slug: 'demo-space' })
+    .select()
+    .single();
+
+  if (wsError) {
+    console.error('Error creating workspace:', wsError);
+    return;
+  }
+
+  await supabase
+    .from('memberships')
+    .insert({ user_id: userId, workspace_id: ws.id, role: 'OWNER' });
+
+  const { data: proj, error: projError } = await supabase
+    .from('projects')
+    .insert({ name: 'Demo Project', key: 'DEMO', workspace_id: ws.id })
+    .select()
+    .single();
+
+  if (projError) {
+    console.error('Error creating project:', projError);
+    return;
+  }
+
+  await supabase
+    .from('project_members')
+    .insert({ user_id: userId, project_id: proj.id, role: 'MANAGER' });
+
+  const { data: todo } = await supabase
+    .from('columns')
+    .insert({ name: 'To Do', order: 1, project_id: proj.id })
+    .select()
+    .single();
+
+  const { data: doing } = await supabase
+    .from('columns')
+    .insert({ name: 'Doing', order: 2, project_id: proj.id })
+    .select()
+    .single();
+
+  const { data: done } = await supabase
+    .from('columns')
+    .insert({ name: 'Done', order: 3, project_id: proj.id })
+    .select()
+    .single();
+
+  await supabase
+    .from('tasks')
+    .insert({ title: 'Welcome task', description: 'Drag me!', column_id: todo!.id });
+
+  console.log('Seeded successfully! Project ID:', proj.id);
+  console.log('Login with: demo@example.com / demo1234');
 }
-main().finally(() => prisma.$disconnect());
+
+main();
