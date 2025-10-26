@@ -8,16 +8,17 @@ datasource db {
 }
 
 model User {
-  id           String   @id @default(cuid())
-  email        String   @unique
-  passwordHash String
-  name         String
-  image        String?
-  memberships  Membership[]
-  comments     Comment[]
-  tasks        Task[]       @relation("TaskAssignee")
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id              String   @id @default(cuid())
+  email           String   @unique
+  passwordHash    String
+  name            String
+  image           String?
+  memberships     Membership[]
+  projectMembers  ProjectMember[]
+  comments        Comment[]
+  tasks           Task[]       @relation("TaskAssignee")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 }
 
 model Workspace {
@@ -39,7 +40,12 @@ model Membership {
   @@unique([userId, workspaceId])
 }
 
-enum Role { OWNER ADMIN MEMBER VIEWER }
+enum Role {
+  OWNER
+  ADMIN
+  MEMBER
+  VIEWER
+}
 
 model Project {
   id           String   @id @default(cuid())
@@ -62,7 +68,11 @@ model ProjectMember {
   @@unique([projectId, userId])
 }
 
-enum ProjectRole { MANAGER CONTRIBUTOR VIEWER }
+enum ProjectRole {
+  MANAGER
+  CONTRIBUTOR
+  VIEWER
+}
 
 model Column {
   id        String  @id @default(cuid())
@@ -83,11 +93,17 @@ model Task {
   column      Column  @relation(fields: [columnId], references: [id])
   priority    Priority @default(MEDIUM)
   dueDate     DateTime?
+  comments    Comment[]
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }
 
-enum Priority { LOW MEDIUM HIGH URGENT }
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
 
 model Comment {
   id        String  @id @default(cuid())
